@@ -56,6 +56,7 @@ class AudioPlayerWrapper :
     struct scheduled_sound_type
     {
         double scheduled_time=0;
+        double duration=0;
         yarp::sig::Sound sound_data;
     };
 
@@ -85,6 +86,7 @@ public:
 private:
     yarp::os::Port  m_rpcPort;
     yarp::os::BufferedPort<yarp::sig::Sound> m_audioInPort;
+    yarp::os::BufferedPort<yarp::sig::Sound> m_audioOutPort;
     yarp::os::Port m_statusPort;
 
     yarp::dev::IAudioRender *m_irender = nullptr;
@@ -92,6 +94,7 @@ private:
     yarp::sig::AudioBufferSize m_current_buffer_size;
     yarp::sig::AudioBufferSize m_max_buffer_size;
     std::queue<scheduled_sound_type> m_sound_buffer;
+    double m_next_scheduled_time = 0.0;
 
     bool   m_isPlaying = false;
 

@@ -160,6 +160,7 @@ bool AudioPlayerWrapper::open(yarp::os::Searchable &config)
     if (!parseParams(config)) { return false; }
 
     std::string audioInPortName = m_name + "/audio:i";
+    std::string audioOutPortName = m_name + "/audio:o";
     std::string rpcPortName = m_name + "/rpc:i";
     std::string statusPortName = m_name + "/status:o";
 
@@ -169,6 +170,12 @@ bool AudioPlayerWrapper::open(yarp::os::Searchable &config)
         return false;
     }
     m_audioInPort.setStrict(true);
+
+    if (!m_audioOutPort.open(audioOutPortName))
+    {
+        yCError(AUDIOPLAYERWRAPPER, "Failed to open port %s", audioOutPortName.c_str());
+        return false;
+    }
 
     if (!m_statusPort.open(statusPortName))
     {
@@ -192,6 +199,8 @@ void AudioPlayerWrapper::threadRelease()
 {
     m_audioInPort.interrupt();
     m_audioInPort.close();
+    m_audioOutPort.interrupt();
+    m_audioOutPort.close();
     m_rpcPort.interrupt();
     m_rpcPort.close();
     m_statusPort.interrupt();
@@ -223,21 +232,23 @@ void AudioPlayerWrapper::run()
         }
 
         scheduled_sound_type ss;
-#if 1
-        //This is simple, but we don't know how big the sound is...
+        ss.duration = s->getDuration();
         ss.scheduled_time = current_time + m_playback_network_buffer_size;
-#elif 0
-        //This is ok, but it doesn't work if the sounds have different durations...
-        ss.scheduled_time = current_time + 5.0 * s.getDuration();
-#else
-        ss.scheduled_time = current_time + m_buffer_delay > 5.0 * s.getDuration() ? (m_buffer_delay) : (5.0 * s.getDuration());
-#endif
+        if (m_next_scheduled_time > ss.scheduled_time)
+        {
+            ss.scheduled_time = m_next_scheduled_time;
+        }
+        m_next_scheduled_time = ss.scheduled_time + ss.duration;
         ss.sound_data = *s;
         m_sound_buffer.push(ss);
     }
 
     if (!m_sound_buffer.empty() && current_time > m_sound_buffer.front().scheduled_time)
     {
+        yarp::sig::Sound& sound = m_audioOutPort.prepare();
+        sound = m_sound_buffer.front().sound_data;
+        m_audioOutPort.write();
+
         m_irender->renderSound(m_sound_buffer.front().sound_data);
         m_sound_buffer.pop();
     }
